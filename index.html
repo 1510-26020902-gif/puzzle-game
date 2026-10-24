@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>블록 게임 - Block Puzzle</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+            overflow: hidden;
+            transition: background 1s ease-in-out;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+        .btn-gradient {
+            background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
+            box-shadow: 0 4px 20px rgba(168, 85, 247, 0.4);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .btn-gradient:hover {
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 8px 25px rgba(168, 85, 247, 0.6);
+        }
+        .btn-gradient:active {
+            transform: translateY(0) scale(0.98);
+        }
+        @keyframes comboPop {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+            100% { transform: translate(-50%, -100%) scale(1); opacity: 0; }
+        }
+        .animate-combo {
+            animation: comboPop 0.8s ease-out forwards;
+        }
+
+        /* Responsive styling for touch controls */
+        .touch-btn {
+            width: 70px;
+            height: 70px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+            transition: all 0.15s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        .touch-btn:active {
+            transform: scale(0.92);
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Hide touch buttons on non-touch desktop environments */
+        @media (hover: hover) and (pointer: fine) {
+            .mobile-touch-bar {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen text-white p-4">
+
+    <!-- Game Container -->
+    <div class="relative w-full max-w-md flex flex-col items-center justify-between h-[90vh] max-h-[800px] glass-panel rounded-3xl p-5 overflow-hidden">
+        
+        <!-- Header HUD -->
+        <div class="w-full flex justify-between items-center mb-2 z-10">
+            <div class="flex flex-col">
+                <span class="text-xs text-slate-400 font-bold uppercase tracking-wider">Score</span>
+                <span id="scoreText" class="text-3xl font-black text-amber-300 font-mono drop-shadow">0</span>
+            </div>
+            <div class="flex flex-col items-center">
+                <h1 class="text-xl font-black tracking-widest bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-fuchsia-400 to-amber-300 italic">
+                    블록 게임
+                </h1>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="flex flex-col items-end">
+                    <span class="text-xs text-slate-400 font-bold uppercase tracking-wider">High Score</span>
+                    <span id="highScoreText" class="text-2xl font-black text-emerald-400 font-mono">0</span>
+                </div>
+                <!-- Pause Toggle Button -->
+                <button id="pauseToggleBtn" class="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-600/50 text-slate-200 transition-colors cursor-pointer" title="일시정지 (P키)">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 9 0 0118 0z"/>
+                    </svg>
+                </button>
+                <!-- Mute / Unmute Toggle Button -->
+                <button id="soundToggleBtn" class="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-600/50 text-slate-200 transition-colors cursor-pointer" title="소리 켜기/끄기">
+                    <svg id="soundOnIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072M17.95 6.05a8 8 0 010 11.314M11 5L6 9H2v6h4l5 4V5z"/>
+                    </svg>
+                    <svg id="soundOffIcon" class="w-5 h-5 hidden text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" clip-rule="evenodd" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Canvas Board Wrapper -->
+        <div class="relative w-full flex-1 flex items-center justify-center my-2">
+            <canvas id="gameCanvas" class="rounded-2xl cursor-pointer touch-none shadow-2xl"></canvas>
+            
+            <!-- Combo / Clear Floating Text Overlay -->
+            <div id="comboContainer" class="absolute pointer-events-none inset-0"></div>
+        </div>
+
+        <!-- Footer Info / Hint -->
+        <div class="text-xs text-slate-300 font-medium my-1 text-center opacity-80">
+            아래 블록을 보드 위로 드래그하여 배치하세요!
+        </div>
+
+        <!-- Mobile Touch Action Buttons (70x70, Semi-transparent, Hidden on PC with mouse) -->
+        <div class="mobile-touch-bar w-full flex justify-around items-center pt-2 pb-1 z-20">
+            <!-- Touch Pause Button -->
+            <button id="touchPauseBtn" class="touch-btn active:bg-white/30" title="일시정지">
+                <svg class="w-8 h-8 text-white drop-shadow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 9 0 0118 0z"/>
+                </svg>
+            </button>
+            
+            <!-- Touch Sound Toggle Button -->
+            <button id="touchSoundBtn" class="touch-btn active:bg-white/30" title="음소거">
+                <svg id="touchSoundOnIcon" class="w-8 h-8 text-white drop-shadow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072M17.95 6.05a8 8 0 010 11.314M11 5L6 9H2v6h4l5 4V5z"/>
+                </svg>
+                <svg id="touchSoundOffIcon" class="w-8 h-8 text-rose-400 drop-shadow hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" clip-rule="evenodd" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Start Overlay Screen -->
+        <div id="startScreen" class="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950/90 p-6 text-center backdrop-blur-md">
+            <div class="w-20 h-20 mb-4 rounded-2xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/30">
+                <svg class="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                </svg>
+            </div>
+            <h2 class="text-4xl font-black text-white mb-2 tracking-wider">블록 퍼즐</h2>
+            <p class="text-slate-300 text-sm max-w-xs mb-4 leading-relaxed">
+                블록을 전략적으로 놓아 가로줄과 세로줄을 한 번에 많이 완성하고 최고의 점수를 기록해 보세요!
+            </p>
+            
+            <!-- Start Screen High Score Display Container -->
+            <div class="glass-panel rounded-xl px-5 py-2.5 mb-6 border border-emerald-500/30 flex items-center gap-3">
+                <span class="text-xs text-slate-300 font-bold uppercase tracking-wider">최고 기록</span>
+                <span id="startHighScoreText" class="text-2xl font-black text-emerald-400 font-mono">0</span>
+            </div>
+
+            <button id="startBtn" class="btn-gradient px-10 py-4 rounded-2xl font-black text-xl text-white tracking-widest uppercase cursor-pointer">
+                게임 시작
+            </button>
+        </div>
+
+        <!-- Pause Overlay Screen -->
+        <div id="pauseScreen" class="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950/85 p-6 text-center backdrop-blur-md hidden">
+            <div class="w-16 h-16 mb-4 rounded-2xl bg-indigo-600/30 border border-indigo-400/30 flex items-center justify-center text-indigo-300">
+                <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+            <h2 class="text-3xl font-black text-white mb-2 tracking-wider">일시 정지</h2>
+            <p class="text-slate-400 text-xs mb-6">다시 시작하려면 버튼을 누르거나 'P' 키를 누르세요.</p>
+            <button id="resumeBtn" class="btn-gradient px-8 py-3 rounded-2xl font-bold text-lg text-white tracking-wider cursor-pointer">
+                계속 하기
+            </button>
+        </div>
+
+        <!-- Game Over Overlay Screen -->
+        <div id="gameOverScreen" class="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950/90 p-6 text-center backdrop-blur-md hidden">
+            <h2 class="text-4xl font-black text-red-400 mb-2 italic">GAME OVER</h2>
+            <p class="text-slate-300 text-sm mb-6">더 이상 블록을 배치할 공간이 없습니다!</p>
+
+            <div class="glass-panel rounded-2xl p-5 mb-8 w-full max-w-xs space-y-3 border border-slate-700">
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-400 text-sm">획득 점수</span>
+                    <span id="finalScore" class="text-2xl font-black text-amber-300 font-mono">0</span>
+                </div>
+                <div class="flex justify-between items-center pt-2 border-t border-slate-700/50">
+                    <span class="text-slate-400 text-sm">최고 기록</span>
+                    <span id="finalHighScore" class="text-2xl font-black text-emerald-400 font-mono">0</span>
+                </div>
+            </div>
+
+            <button id="restartBtn" class="btn-gradient px-10 py-4 rounded-2xl font-black text-xl text-white tracking-widest uppercase cursor-pointer">
+                다시 하기
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        /**
+         * Custom Audio Manager for Game SFX
+         * Plays file-based audio and allows overlapping restart execution safely.
+         */
+        class SoundFX {
+            constructor() {
+                this.isMuted = false;
+                this.isAudioEnabled = false; // Enabled only after game starts
+                
+                // Preload audio files
+                this.sounds = {
+                    start: this.createAudio('sound/game start sound.wav'),
+                    gameOver: this.createAudio('sound/game over sound.wav'),
+                    pop: this.createAudio('sound/pop sound.wav')
+                };
+            }
+
+            createAudio(src) {
+                const audio = new Audio();
+                audio.src = src;
+                audio.preload = 'auto';
+                return audio;
+            }
+
+            enableAudio() {
+                this.isAudioEnabled = true;
+            }
+
+            toggleMute() {
+                this.isMuted = !this.isMuted;
+                return this.isMuted;
+            }
+
+            playSound(type) {
+                if (!this.isAudioEnabled || this.isMuted) return;
+                const originalAudio = this.sounds[type];
+                if (!originalAudio) return;
+
+                try {
+                    // Clone audio element so overlapping sounds play independently from the start
+                    const soundClone = originalAudio.cloneNode();
+                    soundClone.volume = 1.0;
+                    soundClone.currentTime = 0;
+                    
+                    const playPromise = soundClone.play();
+                    if (playPromise !== undefined) {
+                        playPromise.catch(() => {
+                            // Silently ignore if device/browser restricts audio playback
+                        });
+                    }
+                } catch (e) {
+                    // Fallback to maintain smooth game loop if sound playback encounters device error
+                }
+            }
+
+            playStart() {
+                this.playSound('start');
+            }
+
+            playClear() {
+                this.playSound('pop');
+            }
+
+            playGameOver() {
+                this.playSound('gameOver');
+            }
+        }
+
+        const sound = new SoundFX();
+
+        // Sound Toggle Button Handler
+        const soundToggleBtn = document.getElementById('soundToggleBtn');
+        const soundOnIcon = document.getElementById('soundOnIcon');
+        const soundOffIcon = document.getElementById('soundOffIcon');
+        
+        // Touch Sound Icons
+        const touchSoundBtn = document.getElementById('touchSoundBtn');
+        const touchSoundOnIcon = document.getElementById('touchSoundOnIcon');
+        const touchSoundOffIcon = document.getElementById('touchSoundOffIcon');
+
+        function syncSoundUI(isMuted) {
+            if (isMuted) {
+                soundOnIcon.classList.add('hidden');
+                soundOffIcon.classList.remove('hidden');
+                touchSoundOnIcon.classList.add('hidden');
+                touchSoundOffIcon.classList.remove('hidden');
+            } else {
+                soundOnIcon.classList.remove('hidden');
+                soundOffIcon.classList.add('hidden');
+                touchSoundOnIcon.classList.remove('hidden');
+                touchSoundOffIcon.classList.add('hidden');
+            }
+        }
+
+        soundToggleBtn.addEventListener('click', () => {
+            const isMuted = sound.toggleMute();
+            syncSoundUI(isMuted);
+        });
+
+        if (touchSoundBtn) {
+            touchSoundBtn.addEventListener('click', () => {
+                const isMuted = sound.toggleMute();
+                syncSoundUI(isMuted);
+            });
+        }
+
+        // Touch Pause Button Binding
+        const touchPauseBtn = document.getElementById('touchPauseBtn');
+        if (touchPauseBtn) {
+            touchPauseBtn.addEventListener('click', () => {
+                togglePause();
+            });
+        }
+
+        // Player image handling with fallback (Single Source of Truth)
+        const playerImg = new Image();
+        let isPlayerImgLoaded = false;
+        playerImg.onload = () => {
+            isPlayerImgLoaded = true;
+            render();
+        };
+        playerImg.onerror = () => {
+            isPlayerImgLoaded = false;
+        };
+        playerImg.src = 'image/my.png';
+
+        // Canvas & Board Parameters
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const GRID_SIZE = 10;
+        let CELL_SIZE = 34;
+        let BOARD_PADDING = 12;
+        let TRAY_HEIGHT = 120;
+
+        // Colors Palette for Blocks
+        const BLOCK_COLORS = [
+            null,
+            { main: '#38bdf8', shadow: '#0284c7' }, // Cyan
+            { main: '#f43f5e', shadow: '#be123c' }, // Rose
+            { main: '#10b981', shadow: '#047857' }, // Emerald
+            { main: '#fbbf24', shadow: '#d97706' }, // Amber
+            { main: '#a855f7', shadow: '#7e22ce' }, // Purple
+            { main: '#ec4899', shadow: '#be185d' }, // Pink
+            { main: '#6366f1', shadow: '#4338ca' }  // Indigo
+        ];
+
+        // Shapes definitions (Matrix formats)
+        const SHAPES = [
+            // 1x1 (High frequency for high playability)
+            { shape: [[1]], colorIndex: 1, weight: 3 },
+            
+            // Small Dominoes & Trios
+            { shape: [[1,1]], colorIndex: 4, weight: 3 },
+            { shape: [[1],[1]], colorIndex: 4, weight: 3 },
+            { shape: [[1,1,1]], colorIndex: 5, weight: 2 },
+            { shape: [[1],[1],[1]], colorIndex: 5, weight: 2 },
+            
+            // 2x2 Box
+            { shape: [[1,1],[1,1]], colorIndex: 2, weight: 2 },
+            
+            // Small Corners & Ts
+            { shape: [[1,1],[1,0]], colorIndex: 7, weight: 2 },
+            { shape: [[1,1],[0,1]], colorIndex: 1, weight: 2 },
+            { shape: [[0,1],[1,1]], colorIndex: 2, weight: 2 },
+            { shape: [[1,0],[1,1]], colorIndex: 3, weight: 2 },
+            
+            // Standard L Shapes
+            { shape: [[1,0],[1,0],[1,1]], colorIndex: 1, weight: 1 },
+            { shape: [[0,1],[0,1],[1,1]], colorIndex: 2, weight: 1 },
+            { shape: [[1,1,1],[1,0,0]], colorIndex: 3, weight: 1 },
+            { shape: [[1,1,1],[0,0,1]], colorIndex: 4, weight: 1 },
+            
+            // T Shapes
+            { shape: [[1,1,1],[0,1,0]], colorIndex: 5, weight: 1 },
+            { shape: [[0,1,0],[1,1,1]], colorIndex: 6, weight: 1 },
+            
+            // Long Lines (Lower weight to avoid quick game overs)
+            { shape: [[1,1,1,1]], colorIndex: 6, weight: 1 },
+            { shape: [[1],[1],[1],[1]], colorIndex: 6, weight: 1 },
+            { shape: [[1,1,1,1,1]], colorIndex: 7, weight: 0.5 },
+            { shape: [[1],[1],[1],[1],[1]], colorIndex: 7, weight: 0.5 },
+            
+            // 3x3 Large Block (Low weight)
+            { shape: [[1,1,1],[1,1,1],[1,1,1]], colorIndex: 3, weight: 0.5 }
+        ];
+
+        // Weighted Random Helper for smoother shape generation
+        function getRandomShape() {
+            const totalWeight = SHAPES.reduce((sum, s) => sum + (s.weight || 1), 0);
+            let random = Math.random() * totalWeight;
+            
+            for (const shapeObj of SHAPES) {
+                const weight = shapeObj.weight || 1;
+                if (random < weight) {
+                    return shapeObj;
+                }
+                random -= weight;
+            }
+            return SHAPES[0];
+        }
+
+        // Game State Variables
+        let board = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(0));
+        let trayBlocks = [null, null, null]; // 3 slot blocks
+        let draggingBlock = null;
+        let dragOffset = { x: 0, y: 0 };
+        let pointerPos = { x: 0, y: 0 };
+        let score = 0;
+        let highScore = parseInt(localStorage.getItem('block_puzzle_highscore') || '0', 10);
+        let comboCount = 0; // Combo streak counter
+        let isGameOver = false;
+        let isGameStarted = false;
+        let isPaused = false;
+
+        // Background Color Themes Array (Changes every 100 points)
+        const BACKGROUND_THEMES = [
+            'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)', // Default Deep Blue
+            'linear-gradient(135deg, #1e1b4b 0%, #4c1d95 100%)', // Purple Night
+            'linear-gradient(135deg, #064e3b 0%, #022c22 100%)', // Emerald Forest
+            'linear-gradient(135deg, #881337 0%, #4c0519 100%)', // Ruby Crimson
+            'linear-gradient(135deg, #78350f 0%, #451a03 100%)', // Amber Sunset
+            'linear-gradient(135deg, #134e4a 0%, #042f2e 100%)', // Dark Teal
+            'linear-gradient(135deg, #31135e 0%, #1a0833 100%)', // Cyber Violet
+            'linear-gradient(135deg, #0f2b46 0%, #081626 100%)'  // Midnight Cyan
+        ];
+
+        // Scale Canvas according to DPI and Screen Size
+        function resizeCanvas() {
+            const container = canvas.parentElement;
+            const maxW = container.clientWidth - 10;
+            
+            // Calculate optimal cell size to fit board and tray
+            CELL_SIZE = Math.floor((maxW - BOARD_PADDING * 2) / GRID_SIZE);
+            const boardWidth = CELL_SIZE * GRID_SIZE + BOARD_PADDING * 2;
+            const totalHeight = boardWidth + TRAY_HEIGHT;
+
+            canvas.style.width = `${boardWidth}px`;
+            canvas.style.height = `${totalHeight}px`;
+
+            const dpi = window.devicePixelRatio || 1;
+            canvas.width = boardWidth * dpi;
+            canvas.height = totalHeight * dpi;
+            ctx.scale(dpi, dpi);
+        }
+
+        // Generate 3 random blocks in tray
+        function fillTray() {
+            for (let i = 0; i < 3; i++) {
+                const randomShape = getRandomShape();
+                trayBlocks[i] = {
+                    id: Math.random().toString(36).substring(2, 9),
+                    shape: randomShape.shape,
+                    colorIndex: randomShape.colorIndex,
+                    trayIndex: i
+                };
+            }
+        }
+
+        // Draw Block Tile Function
+        function drawTile(x, y, size, colorIndex, alpha = 1) {
+            if (!colorIndex || colorIndex === 0) return;
+            const color = BLOCK_COLORS[colorIndex];
+            
+            ctx.save();
+            ctx.globalAlpha = alpha;
+
+            if (isPlayerImgLoaded) {
+                // Try to render image/my.png (fit to tile size)
+                try {
+                    ctx.drawImage(playerImg, x + 1, y + 1, size - 2, size - 2);
+                } catch (e) {
+                    // In case of error during drawing, fallback to color tile
+                    drawColorTile(x, y, size, color);
+                }
+            } else {
+                // Fallback to original colorful tiles
+                drawColorTile(x, y, size, color);
+            }
+
+            ctx.restore();
+        }
+
+        // Helper to draw default colorful tile block
+        function drawColorTile(x, y, size, color) {
+            // Main Tile Body
+            ctx.fillStyle = color.main;
+            ctx.beginPath();
+            ctx.roundRect(x + 1, y + 1, size - 2, size - 2, 6);
+            ctx.fill();
+
+            // Bottom Shadow Effect for Depth
+            ctx.fillStyle = color.shadow;
+            ctx.beginPath();
+            ctx.roundRect(x + 3, y + size - 6, size - 6, 3, 2);
+            ctx.fill();
+
+            // Top Highlight Effect
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.beginPath();
+            ctx.roundRect(x + 3, y + 3, size - 6, 3, 2);
+            ctx.fill();
+        }
+
+        // Render Entire Game Scene
+        function render() {
+            const boardSize = CELL_SIZE * GRID_SIZE;
+            
+            // Clear Canvas Background
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. Draw Grid Board Background
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.6)';
+            ctx.beginPath();
+            ctx.roundRect(BOARD_PADDING, BOARD_PADDING, boardSize, boardSize, 16);
+            ctx.fill();
+
+            // Draw Grid Cells Base
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const cellX = BOARD_PADDING + c * CELL_SIZE;
+                    const cellY = BOARD_PADDING + r * CELL_SIZE;
+
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+                    ctx.beginPath();
+                    ctx.roundRect(cellX + 2, cellY + 2, CELL_SIZE - 4, CELL_SIZE - 4, 6);
+                    ctx.fill();
+
+                    // Filled Cells on Board
+                    if (board[r][c] > 0) {
+                        drawTile(cellX, cellY, CELL_SIZE, board[r][c]);
+                    }
+                }
+            }
+
+            // 2. Draw Drag Preview Shadow if Dragging
+            if (draggingBlock) {
+                const hoverGrid = getHoverGridPosition(draggingBlock, pointerPos);
+                if (hoverGrid && canPlaceBlock(draggingBlock.shape, hoverGrid.r, hoverGrid.c)) {
+                    for (let r = 0; r < draggingBlock.shape.length; r++) {
+                        for (let c = 0; c < draggingBlock.shape[r].length; c++) {
+                            if (draggingBlock.shape[r][c]) {
+                                const targetX = BOARD_PADDING + (hoverGrid.c + c) * CELL_SIZE;
+                                const targetY = BOARD_PADDING + (hoverGrid.r + r) * CELL_SIZE;
+                                drawTile(targetX, targetY, CELL_SIZE, draggingBlock.colorIndex, 0.4);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Draw Tray Area Background
+            const trayY = BOARD_PADDING * 2 + boardSize;
+            const trayW = boardSize;
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.4)';
+            ctx.beginPath();
+            ctx.roundRect(BOARD_PADDING, trayY, trayW, TRAY_HEIGHT - 10, 16);
+            ctx.fill();
+
+            // Render Tray Blocks
+            for (let i = 0; i < 3; i++) {
+                const block = trayBlocks[i];
+                if (!block) continue;
+                if (draggingBlock && draggingBlock.id === block.id) continue; // Skip rendering dragged item in tray
+
+                const slotW = trayW / 3;
+                const slotCenterX = BOARD_PADDING + slotW * i + slotW / 2;
+                const slotCenterY = trayY + (TRAY_HEIGHT - 10) / 2;
+
+                const miniCellSize = Math.min(20, CELL_SIZE * 0.55);
+                const blockW = block.shape[0].length * miniCellSize;
+                const blockH = block.shape.length * miniCellSize;
+
+                const startX = slotCenterX - blockW / 2;
+                const startY = slotCenterY - blockH / 2;
+
+                for (let r = 0; r < block.shape.length; r++) {
+                    for (let c = 0; c < block.shape[r].length; c++) {
+                        if (block.shape[r][c]) {
+                            drawTile(
+                                startX + c * miniCellSize,
+                                startY + r * miniCellSize,
+                                miniCellSize,
+                                block.colorIndex
+                            );
+                        }
+                    }
+                }
+            }
+
+            // 4. Render Dragged Block Floating Above Everything
+            if (draggingBlock) {
+                const drawX = pointerPos.x - dragOffset.x;
+                const drawY = pointerPos.y - dragOffset.y - 40; // Touch offset for visibility
+
+                for (let r = 0; r < draggingBlock.shape.length; r++) {
+                    for (let c = 0; c < draggingBlock.shape[r].length; c++) {
+                        if (draggingBlock.shape[r][c]) {
+                            drawTile(
+                                drawX + c * CELL_SIZE,
+                                drawY + r * CELL_SIZE,
+                                CELL_SIZE,
+                                draggingBlock.colorIndex,
+                                0.95
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- Grid Logic & Helpers ---
+        function getCanvasCoordinates(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
+        }
+
+        function getHoverGridPosition(block, pos) {
+            const drawX = pos.x - dragOffset.x;
+            const drawY = pos.y - dragOffset.y - 40;
+
+            const col = Math.round((drawX - BOARD_PADDING) / CELL_SIZE);
+            const row = Math.round((drawY - BOARD_PADDING) / CELL_SIZE);
+
+            if (row >= 0 && row + block.shape.length <= GRID_SIZE &&
+                col >= 0 && col + block.shape[0].length <= GRID_SIZE) {
+                return { r: row, c: col };
+            }
+            return null;
+        }
+
+        function canPlaceBlock(shape, startR, startC) {
+            if (startR < 0 || startR + shape.length > GRID_SIZE ||
+                startC < 0 || startC + shape[0].length > GRID_SIZE) {
+                return false;
+            }
+            for (let r = 0; r < shape.length; r++) {
+                for (let c = 0; c < shape[r].length; c++) {
+                    if (shape[r][c] && board[startR + r][startC + c] !== 0) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function placeBlock(block, startR, startC) {
+            let blockTileCount = 0;
+            for (let r = 0; r < block.shape.length; r++) {
+                for (let c = 0; c < block.shape[r].length; c++) {
+                    if (block.shape[r][c]) {
+                        board[startR + r][startC + c] = block.colorIndex;
+                        blockTileCount++;
+                    }
+                }
+            }
+
+            score += blockTileCount * 10;
+
+            // Clear tray slot
+            trayBlocks[block.trayIndex] = null;
+
+            // Check lines and clear
+            checkAndClearLines();
+
+            // Fill Tray if all 3 used
+            if (trayBlocks.every(b => b === null)) {
+                fillTray();
+            } else {
+                checkGameOverCondition();
+            }
+
+            updateScoreUI();
+        }
+
+        function checkAndClearLines() {
+            const rowsToClear = [];
+            const colsToClear = [];
+
+            // Check Full Rows
+            for (let r = 0; r < GRID_SIZE; r++) {
+                if (board[r].every(cell => cell > 0)) {
+                    rowsToClear.push(r);
+                }
+            }
+
+            // Check Full Columns
+            for (let c = 0; c < GRID_SIZE; c++) {
+                let full = true;
+                for (let r = 0; r < GRID_SIZE; r++) {
+                    if (board[r][c] === 0) {
+                        full = false;
+                        break;
+                    }
+                }
+                if (full) colsToClear.push(c);
+            }
+
+            const totalLines = rowsToClear.length + colsToClear.length;
+
+            if (totalLines > 0) {
+                // Increment combo streak on successful line clear
+                comboCount++;
+
+                // Clear Rows
+                rowsToClear.forEach(r => {
+                    for (let c = 0; c < GRID_SIZE; c++) board[r][c] = 0;
+                });
+
+                // Clear Cols
+                colsToClear.forEach(c => {
+                    for (let r = 0; r < GRID_SIZE; r++) board[r][c] = 0;
+                });
+
+                // Exponential Bonus Score Calculation (Line count * Combo Streak)
+                const baseScore = totalLines * 100 * totalLines;
+                const comboBonus = comboCount * 50;
+                const lineScore = baseScore + comboBonus;
+                score += lineScore;
+                
+                // Play custom clear sound effect on line removal
+                sound.playClear();
+
+                // Show Combo Text Effect with score bonus detail
+                showComboAnimation(totalLines, comboCount, lineScore);
+            } else {
+                // Reset combo streak if no lines cleared on this block placement
+                comboCount = 0;
+            }
+        }
+
+        function showComboAnimation(lines, combo, addedScore) {
+            const container = document.getElementById('comboContainer');
+            const el = document.createElement('div');
+            el.className = 'absolute text-2xl md:text-3xl font-black italic text-yellow-300 drop-shadow-[0_0_12px_rgba(234,179,8,0.9)] animate-combo text-center pointer-events-none w-full';
+            el.style.left = '50%';
+            el.style.top = '40%';
+
+            if (combo > 1) {
+                el.innerText = `🔥 ${combo} COMBO! 🔥\n+${addedScore} PTS`;
+            } else if (lines > 1) {
+                el.innerText = `DOUBLE CLEAR! x${lines}\n+${addedScore} PTS`;
+            } else {
+                el.innerText = `LINE CLEAR!\n+${addedScore} PTS`;
+            }
+
+            container.appendChild(el);
+            setTimeout(() => el.remove(), 800);
+        }
+
+        function checkGameOverCondition() {
+            // Check if any available block in tray can be placed anywhere on board
+            let canPlaceAny = false;
+
+            for (const block of trayBlocks) {
+                if (!block) continue;
+                for (let r = 0; r < GRID_SIZE; r++) {
+                    for (let c = 0; c < GRID_SIZE; c++) {
+                        if (canPlaceBlock(block.shape, r, c)) {
+                            canPlaceAny = true;
+                            break;
+                        }
+                    }
+                    if (canPlaceAny) break;
+                }
+                if (canPlaceAny) break;
+            }
+
+            if (!canPlaceAny && trayBlocks.some(b => b !== null)) {
+                triggerGameOver();
+            }
+        }
+
+        // Toggle Pause State according to State Diagram (P key & Pause button)
+        function togglePause() {
+            if (!isGameStarted || isGameOver) return;
+
+            isPaused = !isPaused;
+            const pauseScreen = document.getElementById('pauseScreen');
+
+            if (isPaused) {
+                pauseScreen.classList.remove('hidden');
+            } else {
+                pauseScreen.classList.add('hidden');
+                render();
+            }
+        }
+
+        function updateScoreUI() {
+            document.getElementById('scoreText').innerText = score;
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('block_puzzle_highscore', highScore);
+            }
+            document.getElementById('highScoreText').innerText = highScore;
+            
+            // Update Start Screen High Score UI
+            const startHighScoreEl = document.getElementById('startHighScoreText');
+            if (startHighScoreEl) {
+                startHighScoreEl.innerText = highScore;
+            }
+
+            // Update Body Background Color every 100 points
+            const themeIndex = Math.floor(score / 100) % BACKGROUND_THEMES.length;
+            document.body.style.background = BACKGROUND_THEMES[themeIndex];
+        }
+
+        function onPointerMove(e) {
+            if (!draggingBlock) return;
+            pointerPos = getCanvasCoordinates(e);
+            render();
+        }
+
+        function onPointerDown(e) {
+            if (!isGameStarted || isPaused || isGameOver) return;
+
+            const pos = getCanvasCoordinates(e);
+            const boardSize = CELL_SIZE * GRID_SIZE;
+            const trayY = BOARD_PADDING * 2 + boardSize;
+            const trayW = boardSize;
+
+            // Check if click/touch is within Tray area
+            if (pos.y >= trayY && pos.y <= trayY + TRAY_HEIGHT) {
+                const slotW = trayW / 3;
+                const slotIndex = Math.floor((pos.x - BOARD_PADDING) / slotW);
+
+                if (slotIndex >= 0 && slotIndex < 3 && trayBlocks[slotIndex]) {
+                    draggingBlock = trayBlocks[slotIndex];
+                    pointerPos = pos;
+
+                    // Calculate offset from center/origin of block
+                    const slotCenterX = BOARD_PADDING + slotW * slotIndex + slotW / 2;
+                    const slotCenterY = trayY + (TRAY_HEIGHT - 10) / 2;
+                    
+                    const miniCellSize = Math.min(20, CELL_SIZE * 0.55);
+                    const blockW = draggingBlock.shape[0].length * miniCellSize;
+                    const blockH = draggingBlock.shape.length * miniCellSize;
+
+                    dragOffset = {
+                        x: pos.x - (slotCenterX - blockW / 2),
+                        y: pos.y - (slotCenterY - blockH / 2)
+                    };
+
+                    render();
+                }
+            }
+        }
+
+        function onPointerUp(e) {
+            if (!draggingBlock) return;
+
+            const hoverGrid = getHoverGridPosition(draggingBlock, pointerPos);
+            if (hoverGrid && canPlaceBlock(draggingBlock.shape, hoverGrid.r, hoverGrid.c)) {
+                placeBlock(draggingBlock, hoverGrid.r, hoverGrid.c);
+            }
+
+            draggingBlock = null;
+            render();
+        }
+
+        // Attach Mouse & Touch Handlers
+        canvas.addEventListener('mousedown', onPointerDown);
+        window.addEventListener('mousemove', onPointerMove);
+        window.addEventListener('mouseup', onPointerUp);
+
+        canvas.addEventListener('touchstart', onPointerDown, { passive: false });
+        window.addEventListener('touchmove', onPointerMove, { passive: false });
+        window.addEventListener('touchend', onPointerUp);
+
+        // Keyboard Shortcut Handler for Pause (P Key)
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'p' || e.key === 'P' || e.key === 'ㅔ') {
+                togglePause();
+            }
+        });
+
+        // Pause / Resume UI Controls
+        document.getElementById('pauseToggleBtn').addEventListener('click', togglePause);
+        document.getElementById('resumeBtn').addEventListener('click', togglePause);
+
+        // --- Game Lifecycle ---
+        function startGame() {
+            sound.enableAudio();
+            sound.playStart();
+            
+            board = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(0));
+            score = 0;
+            comboCount = 0; // Reset combo counter on new game
+            isGameOver = false;
+            isPaused = false;
+            isGameStarted = true;
+
+            updateScoreUI();
+            fillTray();
+
+            document.getElementById('startScreen').classList.add('hidden');
+            document.getElementById('pauseScreen').classList.add('hidden');
+            document.getElementById('gameOverScreen').classList.add('hidden');
+
+            resizeCanvas();
+            render();
+        }
+
+        function triggerGameOver() {
+            isGameOver = true;
+            sound.playGameOver();
+
+            document.getElementById('finalScore').innerText = score;
+            document.getElementById('finalHighScore').innerText = highScore;
+            
+            // Also refresh start screen high score value when game ends
+            updateScoreUI();
+
+            document.getElementById('gameOverScreen').classList.remove('hidden');
+        }
+
+        // Button Bindings
+        document.getElementById('startBtn').addEventListener('click', startGame);
+        document.getElementById('restartBtn').addEventListener('click', startGame);
+
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+            render();
+        });
+
+        // Initialize Screen on Load
+        resizeCanvas();
+        updateScoreUI();
+    </script>
+</body>
+</html>
